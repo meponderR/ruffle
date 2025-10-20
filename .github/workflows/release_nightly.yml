@@ -33,7 +33,7 @@ jobs:
           # Checkout the upstream canonical repo, not the fork
           repository: ruffle-rs/ruffle
           # for most cases use the default branch or a specific ref
-          ref: main
+          ref: master
           fetch-depth: 0
           persist-credentials: false
 
