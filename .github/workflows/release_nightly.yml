@@ -24,10 +24,18 @@ jobs:
       version4: ${{ steps.version.outputs.version4 }}
 
     # Only run the scheduled workflows on the main repo.
-    if: github.repository == 'ruffle-rs/ruffle' || github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
+    #if: github.repository == 'ruffle-rs/ruffle' || github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout upstream ruffle-rs/ruffle (use upstream source)
+        uses: actions/checkout@v5
+        with:
+          # Checkout the upstream canonical repo, not the fork
+          repository: ruffle-rs/ruffle
+          # for most cases use the default branch or a specific ref
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Check for repo activity
         id: activity
@@ -99,9 +107,11 @@ jobs:
         include:
           - build_name: linux-x86_64
             os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
 
           - build_name: linux-aarch64
             os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
 
           # Mac does two Rust builds to make a universal binary
           - build_name: macos-x86_64
@@ -139,6 +149,7 @@ jobs:
       - name: Clone Ruffle repo
         uses: actions/checkout@v5
         with:
+          repository: ruffle-rs/ruffle
           ref: ${{ needs.create-nightly-release.outputs.tag_name }}
 
       - name: Install Rust toolchain
