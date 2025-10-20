@@ -49,7 +49,7 @@ def log(msg):
 
 
 def add_release_to_metainfo(path, tag_name, version):
-    url = f'https://github.com/ruffle-rs/ruffle/releases/tag/{tag_name}'
+    url = f'https://github.com/meponder/ruffle/releases/tag/{tag_name}'
     xml_release = xml.Element('release')
     xml_release.set('version', version)
     xml_release.set('date', get_current_date())
