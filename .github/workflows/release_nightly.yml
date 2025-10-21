@@ -58,31 +58,31 @@ jobs:
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
 
-          - build_name: macos-x86_64
-            os: macos-15
-            target: x86_64-apple-darwin
-            MACOSX_DEPLOYMENT_TARGET: 10.7
-            DESKTOP_FEATURES: sandbox,jpegxr
-
-          - build_name: macos-aarch64
-            os: macos-15
-            target: aarch64-apple-darwin
-            MACOSX_DEPLOYMENT_TARGET: 11.0
-            DESKTOP_FEATURES: sandbox,jpegxr
-
-          - build_name: windows-x86_32
-            os: windows-2025
-            target: i686-pc-windows-msvc
-            RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
-            MSI_ARCH: x86
-
-          - build_name: windows-x86_64
-            os: windows-2025
-            target: x86_64-pc-windows-msvc
-            RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
-            MSI_ARCH: x64
+#          - build_name: macos-x86_64
+#            os: macos-15
+#            target: x86_64-apple-darwin
+#            MACOSX_DEPLOYMENT_TARGET: 10.7
+#            DESKTOP_FEATURES: sandbox,jpegxr
+#
+#          - build_name: macos-aarch64
+#            os: macos-15
+#            target: aarch64-apple-darwin
+#            MACOSX_DEPLOYMENT_TARGET: 11.0
+#            DESKTOP_FEATURES: sandbox,jpegxr
+#
+#          - build_name: windows-x86_32
+#            os: windows-2025
+#            target: i686-pc-windows-msvc
+#            RUSTFLAGS: -Ctarget-feature=+crt-static
+#            DESKTOP_FEATURES: jpegxr
+#            MSI_ARCH: x86
+#
+#          - build_name: windows-x86_64
+#            os: windows-2025
+#            target: x86_64-pc-windows-msvc
+#            RUSTFLAGS: -Ctarget-feature=+crt-static
+#            DESKTOP_FEATURES: jpegxr
+#            MSI_ARCH: x64
 
     env:
       CARGO_BUILD_DIR: target/${{ matrix.target }}/release
@@ -115,7 +115,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt install -y libasound2-dev libudev-dev gcc-aarch64-linux-gnu musl-tools
+          sudo apt install -y libasound2-dev libudev-dev gcc-aarch64-linux-gnu musl-tools pkg-config
 
       - name: Install WiX
         if: runner.os == 'Windows'
