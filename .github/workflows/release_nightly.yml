@@ -124,7 +124,7 @@ jobs:
           wix extension add -g WixToolset.UI.wixext/5.0.2
           wix extension add -g WixToolset.Util.wixext/5.0.2
 
-      - name: Debug: verify runner and ALSA pkg-config
+      - name: Debug - verify runner and ALSA pkg-config
         run: |
           echo "Runner OS: $RUNNER_OS"
           uname -a || true
