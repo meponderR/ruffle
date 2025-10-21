@@ -124,6 +124,20 @@ jobs:
           wix extension add -g WixToolset.UI.wixext/5.0.2
           wix extension add -g WixToolset.Util.wixext/5.0.2
 
+      - name: Debug: verify runner and ALSA pkg-config
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          uname -a || true
+          lsb_release -a || true
+          echo "Which pkg-config:"
+          which pkg-config || true
+          echo "pkg-config --version:"
+          pkg-config --version || true
+          echo "pkg-config --list-all | grep -i alsa:"
+          pkg-config --list-all | grep -i alsa || true
+          echo "dpkg list libasound:"
+          dpkg -l | grep libasound || true
+
       - name: Cargo build
         run: cargo build --locked --package ruffle_desktop --release ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} ${{ matrix.target && '--target' }} ${{ matrix.target }}
         env:
