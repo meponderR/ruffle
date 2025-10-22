@@ -55,31 +55,31 @@ jobs:
           - build_name: linux-aarch64
             os: ubuntu-22.04-arm
 
-          - build_name: macos-x86_64
-            os: macos-15
-            target: x86_64-apple-darwin
-            MACOSX_DEPLOYMENT_TARGET: 10.7
-            DESKTOP_FEATURES: sandbox,jpegxr
-
-          - build_name: macos-aarch64
-            os: macos-15
-            target: aarch64-apple-darwin
-            MACOSX_DEPLOYMENT_TARGET: 11.0
-            DESKTOP_FEATURES: sandbox,jpegxr
-
-          - build_name: windows-x86_32
-            os: windows-2025
-            target: i686-pc-windows-msvc
-            RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
-            MSI_ARCH: x86
-
-          - build_name: windows-x86_64
-            os: windows-2025
-            target: x86_64-pc-windows-msvc
-            RUSTFLAGS: -Ctarget-feature=+crt-static
-            DESKTOP_FEATURES: jpegxr
-            MSI_ARCH: x64
+#          - build_name: macos-x86_64
+#            os: macos-15
+#            target: x86_64-apple-darwin
+#            MACOSX_DEPLOYMENT_TARGET: 10.7
+#            DESKTOP_FEATURES: sandbox,jpegxr
+#
+#          - build_name: macos-aarch64
+#            os: macos-15
+#            target: aarch64-apple-darwin
+#            MACOSX_DEPLOYMENT_TARGET: 11.0
+#            DESKTOP_FEATURES: sandbox,jpegxr
+#
+#          - build_name: windows-x86_32
+#            os: windows-2025
+#            target: i686-pc-windows-msvc
+#            RUSTFLAGS: -Ctarget-feature=+crt-static
+#            DESKTOP_FEATURES: jpegxr
+#            MSI_ARCH: x86
+#
+#          - build_name: windows-x86_64
+#            os: windows-2025
+#            target: x86_64-pc-windows-msvc
+#            RUSTFLAGS: -Ctarget-feature=+crt-static
+#            DESKTOP_FEATURES: jpegxr
+#            MSI_ARCH: x64
 
     env:
       PACKAGE_FILE: ${{ needs.prepare.outputs.date }}-${{ matrix.build_name }}.${{ startsWith(matrix.build_name, 'win') && 'zip' || 'tar.gz' }}
@@ -178,172 +178,3 @@ jobs:
           name: ${{ matrix.build_name }}
           path: ${{ env.PACKAGE_FILE }}
 
-      - name: Build Safari Web Extension stub binary
-        if: runner.os == 'macOS'
-        run: cargo build --locked --package ruffle_web_safari --release ${{ matrix.target && '--target' }} ${{ matrix.target }}
-        env:
-          CFG_RELEASE_CHANNEL: nightly
-          RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
-          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.MACOSX_DEPLOYMENT_TARGET }}
-
-      - name: Upload macOS build artifact
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.build_name }}
-          path: |
-            ${{ env.CARGO_BUILD_DIR }}/ruffle_desktop
-            ${{ env.CARGO_BUILD_DIR }}/ruffle_web_safari
-            package
-
-  build-mac-universal-binary:
-    name: Build macOS universal binary
-    needs: [prepare, build]
-    runs-on: macos-15
-    if: needs.prepare.outputs.is_active == 'true'
-    env:
-      PACKAGE_FILE: ${{ needs.prepare.outputs.date }}-macos-universal.tar.gz
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Download aarch64 binary
-        uses: actions/download-artifact@v5
-        with:
-          name: macos-aarch64
-
-      - name: Download x86_64 binary
-        uses: actions/download-artifact@v5
-        with:
-          name: macos-x86_64
-
-      - name: Make universal desktop binary
-        run: |
-          mkdir -p package
-          lipo -create -output package/ruffle target/x86_64-apple-darwin/release/ruffle_desktop target/aarch64-apple-darwin/release/ruffle_desktop
-          chmod +x package/ruffle
-
-      - name: Make universal Safari stub binary
-        continue-on-error: true
-        run: |
-          lipo -create -output package/ruffle_web_safari target/x86_64-apple-darwin/release/ruffle_web_safari target/aarch64-apple-darwin/release/ruffle_web_safari || true
-          chmod +x package/ruffle_web_safari || true
-
-      - name: Create app bundle skeleton
-        run: |
-          cp -r desktop/packages/macOS package/Ruffle.app || true
-          mkdir -p package/Ruffle.app/Contents/MacOS
-          mv package/ruffle package/Ruffle.app/Contents/MacOS/ruffle || true
-
-      - name: Package macOS universal
-        run: |
-          cd package
-          tar -czvf ../"${{ env.PACKAGE_FILE }}" *
-
-      - name: Upload macOS universal artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-universal
-          path: ${{ env.PACKAGE_FILE }}
-
-  build-stub-report:
-    name: Build AVM2 stub repository
-    needs: prepare
-    if: needs.prepare.outputs.is_active == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-
-      - name: Generate report
-        run: ./stub-report/generate-report.sh
-
-      - name: Upload report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: avm2_report
-          path: avm2_report.json
-
-  build-browser-extensions:
-    name: Build browser extensions
-    needs: prepare
-    if: needs.prepare.outputs.is_active == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
-          components: rust-src
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org
-
-      - name: Install wasm-bindgen
-        run: cargo install wasm-bindgen-cli --version 0.2.104
-
-      - name: Install wasm-opt
-        uses: sigoden/install-binary@v1
-        with:
-          repo: WebAssembly/binaryen
-          tag: version_124
-          name: wasm-opt
-
-      - name: Install node packages
-        working-directory: web
-        run: npm ci
-
-      - name: Seal version data (local)
-        working-directory: web
-        env:
-          CFG_RELEASE_CHANNEL: nightly
-          VERSION4: "nightly"
-          ENABLE_VERSION_SEAL: "true"
-        run: npm run version-seal
-
-      - name: Build web (reproducible)
-        working-directory: web
-        env:
-          CFG_RELEASE_CHANNEL: nightly
-          VERSION4: "nightly"
-          CARGO_FEATURES: jpegxr
-          WASM_SOURCE: cargo_and_store
-        run: npm run build:repro
-
-      - name: Produce reproducible source archive
-        run: |
-          zip -r reproducible-source.zip . -x '/web/node_modules/*' '/web/*/node_modules/*' '/web/packages/*/dist/*' '/web/docker/docker_builds/packages/*' '/target/*' '/.git/*' '/tests/tests/swfs/*'
-          mv reproducible-source.zip ../reproducible-source-web-${{ needs.prepare.outputs.date }}.zip
-
-      - name: Upload reproducible source artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: reproducible-source
-          path: reproducible-source-web-${{ needs.prepare.outputs.date }}.zip
-
-      - name: Copy web extension zip artifact and upload
-        run: |
-          cp ./web/packages/extension/dist/ruffle_extension.zip ./ruffle_extension-${{ needs.prepare.outputs.date }}.zip
-      - name: Upload web extension artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-extension
-          path: ruffle_extension-${{ needs.prepare.outputs.date }}.zip
