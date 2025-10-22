@@ -52,11 +52,13 @@ jobs:
         include:
           - build_name: linux-x86_64
             os: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
+            # switched from musl to GNU/glibc target
+            target: x86_64-unknown-linux-gnu
 
           - build_name: linux-aarch64
             os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+            # switched from musl to GNU/glibc target
+            target: aarch64-unknown-linux-gnu
 
 #          - build_name: macos-x86_64
 #            os: macos-15
@@ -86,6 +88,8 @@ jobs:
 
     env:
       CARGO_BUILD_DIR: target/${{ matrix.target }}/release
+      # Intent: indicate desired glibc baseline (informational only)
+      GLIBC_VERSION: "2.35"
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -115,7 +119,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt install -y libasound2-dev libudev-dev gcc-aarch64-linux-gnu musl-tools pkg-config
+          # we removed musl-tools and switched to glibc (GNU) targets
+          sudo apt install -y libasound2-dev libudev-dev gcc-aarch64-linux-gnu pkg-config
 
       - name: Install WiX
         if: runner.os == 'Windows'
@@ -124,7 +129,7 @@ jobs:
           wix extension add -g WixToolset.UI.wixext/5.0.2
           wix extension add -g WixToolset.Util.wixext/5.0.2
 
-      - name: Debug - verify runner and ALSA pkg-config
+      - name: Debug - verify runner, pkg-config and glibc info
         run: |
           echo "Runner OS: $RUNNER_OS"
           uname -a || true
@@ -137,6 +142,8 @@ jobs:
           pkg-config --list-all | grep -i alsa || true
           echo "dpkg list libasound:"
           dpkg -l | grep libasound || true
+          echo "ldd / glibc version:"
+          ldd --version || true
 
       - name: Cargo build
         run: cargo build --locked --package ruffle_desktop --release ${{matrix.DESKTOP_FEATURES && '--features' }} ${{matrix.DESKTOP_FEATURES}} ${{ matrix.target && '--target' }} ${{ matrix.target }}
@@ -325,11 +332,9 @@ jobs:
 
       - name: Install node packages
         working-directory: web
-        shell: bash -l {0}
         run: npm ci
 
       - name: Seal version data (local only)
-        shell: bash -l {0}
         working-directory: web
         env:
           CFG_RELEASE_CHANNEL: nightly
@@ -338,7 +343,6 @@ jobs:
         run: npm run version-seal
 
       - name: Build web (reproducible)
-        shell: bash -l {0}
         working-directory: web
         env:
           CFG_RELEASE_CHANNEL: nightly
@@ -348,7 +352,6 @@ jobs:
         run: npm run build:repro
 
       - name: Produce reproducible source archive
-        shell: bash -l {0}
         run: |
           zip -r reproducible-source.zip . -x '/web/node_modules/*' '/web/*/node_modules/*' '/web/packages/*/dist/*' '/web/docker/docker_builds/packages/*' '/target/*' '/.git/*' '/tests/tests/swfs/*'
           mv reproducible-source.zip ../reproducible-source-web-${{ needs.prepare.outputs.date }}.zip
