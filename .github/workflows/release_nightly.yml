@@ -1,14 +1,15 @@
-# Nightly Build (artifacts only)
-# This workflow builds nightly binaries and uploads them as GitHub Actions artifacts.
-name: Nightly Build
+# Release Nightly (build-only, upload artifacts — based on upstream ruffle-rs/ruffle release_nightly)
+name: Release Nightly
 
 on:
-  # Run nightly
   schedule:
     - cron: "0 0 * * *"
-
-  # Allow for manual dispatch on GitHub
   workflow_dispatch:
+
+env:
+  # Intent: indicate desired glibc baseline (informational only)
+  GLIBC_VERSION: "2.35"
+  RELEASE_SCRIPT: ./.github/scripts/release.py
 
 jobs:
   prepare:
@@ -52,62 +53,46 @@ jobs:
         include:
           - build_name: linux-x86_64
             os: ubuntu-24.04
-            # switched from musl to GNU/glibc target
-            target: x86_64-unknown-linux-gnu
 
           - build_name: linux-aarch64
             os: ubuntu-24.04-arm
-            # switched from musl to GNU/glibc target
-            target: aarch64-unknown-linux-gnu
 
-#          - build_name: macos-x86_64
-#            os: macos-15
-#            target: x86_64-apple-darwin
-#            MACOSX_DEPLOYMENT_TARGET: 10.7
-#            DESKTOP_FEATURES: sandbox,jpegxr
-#
-#          - build_name: macos-aarch64
-#            os: macos-15
-#            target: aarch64-apple-darwin
-#            MACOSX_DEPLOYMENT_TARGET: 11.0
-#            DESKTOP_FEATURES: sandbox,jpegxr
-#
-#          - build_name: windows-x86_32
-#            os: windows-2025
-#            target: i686-pc-windows-msvc
-#            RUSTFLAGS: -Ctarget-feature=+crt-static
-#            DESKTOP_FEATURES: jpegxr
-#            MSI_ARCH: x86
-#
-#          - build_name: windows-x86_64
-#            os: windows-2025
-#            target: x86_64-pc-windows-msvc
-#            RUSTFLAGS: -Ctarget-feature=+crt-static
-#            DESKTOP_FEATURES: jpegxr
-#            MSI_ARCH: x64
+          - build_name: macos-x86_64
+            os: macos-15
+            target: x86_64-apple-darwin
+            MACOSX_DEPLOYMENT_TARGET: 10.7
+            DESKTOP_FEATURES: sandbox,jpegxr
+
+          - build_name: macos-aarch64
+            os: macos-15
+            target: aarch64-apple-darwin
+            MACOSX_DEPLOYMENT_TARGET: 11.0
+            DESKTOP_FEATURES: sandbox,jpegxr
+
+          - build_name: windows-x86_32
+            os: windows-2025
+            target: i686-pc-windows-msvc
+            RUSTFLAGS: -Ctarget-feature=+crt-static
+            DESKTOP_FEATURES: jpegxr
+            MSI_ARCH: x86
+
+          - build_name: windows-x86_64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            RUSTFLAGS: -Ctarget-feature=+crt-static
+            DESKTOP_FEATURES: jpegxr
+            MSI_ARCH: x64
 
     env:
+      PACKAGE_FILE: ${{ needs.prepare.outputs.date }}-${{ matrix.build_name }}.${{ startsWith(matrix.build_name, 'win') && 'zip' || 'tar.gz' }}
       CARGO_BUILD_DIR: target/${{ matrix.target }}/release
-      # Intent: indicate desired glibc baseline (informational only)
-      GLIBC_VERSION: "2.35"
 
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout repository
+      - name: Clone repo at default branch
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Set package filename
-        run: |
-          PREFIX="nightly-${{ needs.prepare.outputs.date }}"
-          if [[ "${{ matrix.build_name }}" == win* ]]; then
-            EXT="zip"
-          else
-            EXT="tar.gz"
-          fi
-          echo "PACKAGE_PREFIX=${PREFIX}" >> $GITHUB_ENV
-          echo "PACKAGE_FILE=${PREFIX}-${{ matrix.build_name }}.${EXT}" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -119,8 +104,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          # we removed musl-tools and switched to glibc (GNU) targets
-          sudo apt install -y libasound2-dev libudev-dev gcc-aarch64-linux-gnu pkg-config
+          sudo apt install -y libasound2-dev libudev-dev
 
       - name: Install WiX
         if: runner.os == 'Windows'
@@ -138,8 +122,6 @@ jobs:
           which pkg-config || true
           echo "pkg-config --version:"
           pkg-config --version || true
-          echo "pkg-config --list-all | grep -i alsa:"
-          pkg-config --list-all | grep -i alsa || true
           echo "dpkg list libasound:"
           dpkg -l | grep libasound || true
           echo "ldd / glibc version:"
@@ -191,12 +173,12 @@ jobs:
         env:
           PACKAGE_FILE: ${{ env.PACKAGE_FILE }}
 
-      - name: Upload package artifact
+      - name: Upload package artifact (linux/windows)
+        if: runner.os != 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.build_name }}
           path: ${{ env.PACKAGE_FILE }}
-        if: runner.os != 'macOS'
 
       - name: Build Safari Web Extension stub binary
         if: runner.os == 'macOS'
@@ -221,8 +203,10 @@ jobs:
     needs: [prepare, build]
     runs-on: macos-15
     if: needs.prepare.outputs.is_active == 'true'
+    env:
+      PACKAGE_FILE: ${{ needs.prepare.outputs.date }}-macos-universal.tar.gz
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -237,19 +221,13 @@ jobs:
         with:
           name: macos-x86_64
 
-      - name: Download Safari extension artifact (if present)
-        uses: actions/download-artifact@v5
-        with:
-          name: macos-safari
-        continue-on-error: true
-
       - name: Make universal desktop binary
         run: |
           mkdir -p package
           lipo -create -output package/ruffle target/x86_64-apple-darwin/release/ruffle_desktop target/aarch64-apple-darwin/release/ruffle_desktop
           chmod +x package/ruffle
 
-      - name: Make universal Safari stub binary (best-effort)
+      - name: Make universal Safari stub binary
         continue-on-error: true
         run: |
           lipo -create -output package/ruffle_web_safari target/x86_64-apple-darwin/release/ruffle_web_safari target/aarch64-apple-darwin/release/ruffle_web_safari || true
@@ -264,12 +242,13 @@ jobs:
       - name: Package macOS universal
         run: |
           cd package
-          tar -czvf ../nightly-${{ needs.prepare.outputs.date }}-macos-universal.tar.gz *
+          tar -czvf ../"${{ env.PACKAGE_FILE }}" *
+
       - name: Upload macOS universal artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-universal
-          path: nightly-${{ needs.prepare.outputs.date }}-macos-universal.tar.gz
+          path: ${{ env.PACKAGE_FILE }}
 
   build-stub-report:
     name: Build AVM2 stub repository
@@ -297,7 +276,7 @@ jobs:
           path: avm2_report.json
 
   build-browser-extensions:
-    name: Build browser extensions and reproducible source
+    name: Build browser extensions
     needs: prepare
     if: needs.prepare.outputs.is_active == 'true'
     runs-on: ubuntu-24.04
@@ -315,7 +294,7 @@ jobs:
           components: rust-src
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
@@ -332,9 +311,10 @@ jobs:
 
       - name: Install node packages
         working-directory: web
+        shell: bash -l {0}
         run: npm ci
 
-      - name: Seal version data (local only)
+      - name: Seal version data (local)
         working-directory: web
         env:
           CFG_RELEASE_CHANNEL: nightly
@@ -362,12 +342,11 @@ jobs:
           name: reproducible-source
           path: reproducible-source-web-${{ needs.prepare.outputs.date }}.zip
 
-      - name: Copy web extension zip artifact
+      - name: Copy web extension zip artifact and upload
         run: |
           cp ./web/packages/extension/dist/ruffle_extension.zip ./ruffle_extension-${{ needs.prepare.outputs.date }}.zip
-
-      - name: Upload web extension artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-extension
-          path: ruffle_extension-${{ needs.prepare.outputs.date }}.zip
+        - name: Upload web extension artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: web-extension
+            path: ruffle_extension-${{ needs.prepare.outputs.date }}.zip
