@@ -7,8 +7,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Intent: indicate desired glibc baseline (informational only)
-  GLIBC_VERSION: "2.35"
   RELEASE_SCRIPT: ./.github/scripts/release.py
 
 jobs:
@@ -52,10 +50,10 @@ jobs:
       matrix:
         include:
           - build_name: linux-x86_64
-            os: ubuntu-24.04
+            os: ubuntu-22.04
 
           - build_name: linux-aarch64
-            os: ubuntu-24.04-arm
+            os: ubuntu-22.04-arm
 
           - build_name: macos-x86_64
             os: macos-15
@@ -311,7 +309,6 @@ jobs:
 
       - name: Install node packages
         working-directory: web
-        shell: bash -l {0}
         run: npm ci
 
       - name: Seal version data (local)
@@ -345,8 +342,8 @@ jobs:
       - name: Copy web extension zip artifact and upload
         run: |
           cp ./web/packages/extension/dist/ruffle_extension.zip ./ruffle_extension-${{ needs.prepare.outputs.date }}.zip
-        - name: Upload web extension artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: web-extension
-            path: ruffle_extension-${{ needs.prepare.outputs.date }}.zip
+      - name: Upload web extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-extension
+          path: ruffle_extension-${{ needs.prepare.outputs.date }}.zip
